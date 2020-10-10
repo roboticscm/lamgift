@@ -1,0 +1,37 @@
+{
+  "name": "lamgift",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "webpack-dev-server",
+    "build": "cross-env NODE_ENV=production webpack",
+    "start": "node dist/main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roboticscm/lamgift.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/roboticscm/lamgift/issues"
+  },
+  "homepage": "https://github.com/roboticscm/lamgift#readme",
+  "dependencies": {
+    "rxjs": "^6.6.3",
+    "sheetjs-style": "^0.15.6",
+    "xlsx": "^0.16.8",
+    "xlsx-style": "^0.8.13"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.2",
+    "nodemon": "^2.0.4",
+    "webpack": "^4.44.2",
+    "webpack-cli": "^3.3.12",
+    "webpack-dev-server": "^3.11.0",
+    "webpack-node-externals": "^2.5.2"
+  }
+}
