@@ -227,15 +227,12 @@ export const detailsParse = (source, prJson) => {
 
     const sheetData = [];
     const merge = [];
+
     sheetData.push([
-        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName}`
+        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện Thoại>'} - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
     ]);
-    sheetData.push([
-        `Điện thoại: ${prJson.pharmaceuticalRepresentatives.phoneNumber}`
-    ]);
-    sheetData.push([
-        `Email: ${prJson.pharmaceuticalRepresentatives.email}`
-    ]);
+
+
 
     let sumTotalQty = 0;
     let sumTotalAmount = 0;
@@ -244,6 +241,12 @@ export const detailsParse = (source, prJson) => {
 
     let usedDoctorDiscount = true;
     for (let doctor of prJson.data) {
+        const doctorMerge = [];
+        const doctorSheetData = [];
+        doctorSheetData.push([
+            `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện Thoại>'} - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
+        ]);
+
         let count = 1;
         let totalQty = 0;
         let totalAmount = 0;
@@ -254,6 +257,8 @@ export const detailsParse = (source, prJson) => {
         let hasData = false;
 
         const rows = [];
+        const doctorRows = [];
+
         for (let product of doctor.data) {
             const qty = sumQty(source, getDoctorName(doctor.doctor), product[pName], product[pId]);
             if (qty) {
@@ -273,11 +278,17 @@ export const detailsParse = (source, prJson) => {
                     rows.push([
                         count, product[pName], qty, product[pPrice], amount, product[pDiscount], discountAmout, product[pDoctorDiscount], doctorDiscountAmount, remain
                     ]);
+
+                    doctorRows.push([
+                        count, product[pName], qty, product[pPrice], amount, product[pDoctorDiscount], doctorDiscountAmount
+                    ]);
                 } else {
                     rows.push([
                         count, product[pName], qty, product[pPrice], amount, product[pDiscount], discountAmout
                     ]);
                 }
+
+
 
                 totalQty += qty;
                 totalAmount += amount;
@@ -329,8 +340,66 @@ export const detailsParse = (source, prJson) => {
                     'Tổng cộng', undefined, totalQty, undefined, totalAmount, undefined, totalDiscountAmount
                 ]);
             }
+
+
+            // for doctor report
+            doctorSheetData.push([]);
+            doctorSheetData.push([
+                `BS: ${getDoctorNickname(doctor.doctor)}`
+            ]);
+            if (usedDoctorDiscount) {
+                doctorSheetData.push([
+                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'Chiết Khấu'
+                ]);
+            }
+            doctorSheetData.push(
+                ...doctorRows
+            );
+
+            doctorMerge.push(
+                { s: { r: doctorSheetData.length, c: 0 }, e: { r: doctorSheetData.length, c: 1 } }
+            );
+            // Doctor Summary
+            if (usedDoctorDiscount) {
+                doctorSheetData.push([
+                    'Tổng cộng', undefined, totalQty, undefined, totalAmount, undefined, totalDoctorDiscountAmount
+                ]);
+            }
+
+            const doctorWorksheet = xlsx.utils.aoa_to_sheet(doctorSheetData);
+            currencyFormat(xlsx, doctorWorksheet, 'C');
+            currencyFormat(xlsx, doctorWorksheet, 'D');
+            currencyFormat(xlsx, doctorWorksheet, 'E');
+            currencyFormat(xlsx, doctorWorksheet, 'F');
+            currencyFormat(xlsx, doctorWorksheet, 'G');
+
+            doctorWorksheet["!merges"] = doctorMerge;
+
+            const wscols = [
+                { wch: 6 },
+                { wch: 30 },
+                { wch: 6 },
+                { wch: 7 },
+                { wch: 15 },
+                { wch: 6 },
+                { wch: 12 },
+            ];
+
+            doctorWorksheet['!cols'] = wscols;
+
+            const doctorWorkbook = xlsx.utils.book_new();
+            doctorWorkbook.Props = {
+                Title: 'LamGift',
+                Author: 'Ly Van Khai 0986 409 026',
+                Subject: 'Excel Generator',
+            }
+
+            doctorWorkbook.SheetNames.push('Index');
+
+            doctorWorkbook.Sheets['Index'] = doctorWorksheet;
+
             // write doctor discount
-            xlsx.writeFile(workbook, `${getDestPath()}/${excelFileName}/${unaccentVietnamese(getDoctorNickname(doctor.doctor))}.xlsx`);
+            xlsx.writeFile(doctorWorkbook, `${getDestPath()}/${excelFileName}/${unaccentVietnamese(getDoctorNickname(doctor.doctor))}_${getDoctorShortName(doctor.doctor)}.xlsx`);
         }
     }
 
@@ -452,10 +521,10 @@ const currencyFormat = (xlsx, worksheet, column) => {
 const getDoctorNickname = (name) => {
     const s = name.split('-');
 
-    if (s.length > 0) {
+    if (s.length > 1) {
         return s[0].trim();
     } else {
-        return name;
+        return getDoctorShortName(name);
     }
 }
 
@@ -615,6 +684,23 @@ export const getShortProductName = (name) => {
 }
 
 
+const getDoctorShortName = (name) => {
+    const sn = name.split('-');
+    let fullName;
+    if (sn.length > 1) {
+        fullName = sn[1];
+    } else {
+        fullName = name;
+    }
+
+    const s = fullName.split(' ');
+    const result = [];
+    for (let word of s) {
+        result.push(word[0]);
+    }
+
+    return result.join('').toLowerCase();
+}
 
 
 

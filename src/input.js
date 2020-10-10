@@ -31,7 +31,7 @@ export const checkSourceFile = () => {
                     // pharmaceutical representatives
                     for (let file of configFiles) {
                         const prJson = pharmaceuticalRepresentativesToJson(`${doctorProductPath}/${file}`);
-                        //detailsParse(source, prJson);
+                        detailsParse(source, prJson);
                         summaryParse(source, prJson);
                     }
 
