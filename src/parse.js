@@ -30,7 +30,7 @@ export const summaryParse = (source, prJson) => {
         `Tháng: ${month}/${year}`
     ]);
     sheetData.push([
-        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber} - ${prJson.pharmaceuticalRepresentatives.email}`
+        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện thoại>'}  - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
     ]);
 
     sheetData.push([]);
@@ -39,7 +39,7 @@ export const summaryParse = (source, prJson) => {
         `Tháng: ${month}/${year}`
     ]);
     detailsSheetData.push([
-        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber} - ${prJson.pharmaceuticalRepresentatives.email}`
+        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện thoại>'} - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
     ]);
 
     detailsSheetData.push([]);
@@ -612,4 +612,213 @@ export const exportProduct = (source) => {
 
 export const getShortProductName = (name) => {
     return name.replace(/\(.*?\)/, '').trim();
+}
+
+
+
+
+
+export const productDoctorParse = (source, prJson, pr) => {
+    const xlsx = require('xlsx');
+
+    const workbook = xlsx.utils.book_new();
+
+    workbook.Props = {
+        Title: 'LamGift',
+        Author: 'Ly Van Khai 0986 409 026',
+        Subject: 'Excel Generator',
+    }
+    workbook.SheetNames.push('Summary');
+    workbook.SheetNames.push('Details');
+
+    const fs = require('fs');
+    const excelFileName = unaccentVietnamese(pr.fullName);
+    fs.mkdirSync(getDestPath(), { recursive: true });
+
+    const sheetData = [];
+    const detailsSheetData = [];
+    const merge = [];
+    const detailsMerge = [];
+    const { month, year } = getCurrentMonthYear();
+    sheetData.push([
+        `Tháng: ${month}/${year}`
+    ]);
+    sheetData.push([
+        `Trình dược viên: ${pr.fullName} - ${pr.phoneNumber || '<Điện thoại>'} - ${pr.email || '<Email>'}`
+    ]);
+
+    sheetData.push([]);
+
+    detailsSheetData.push([
+        `Tháng: ${month}/${year}`
+    ]);
+    detailsSheetData.push([
+        `Trình dược viên: ${pr.fullName} - ${pr.phoneNumber || '<Điện thoại>'} - ${pr.email || '<Email>'}`
+    ]);
+
+    detailsSheetData.push([]);
+    const rows = [];
+    const detailsRows = [];
+    for (let product of prJson) {
+        for (let doctor of product.doctors) {
+            const qty = sumQty(source, doctor.DoctorName, product.ProductName, product.ProductId);
+            if (qty) {
+                rows.push(
+                    { name: product.ProductName, qty, price: product.Price, discount: product.Discount }
+                );
+                detailsRows.push({
+                    doctor: doctor.DoctorName, name: product.ProductName, qty, price: product.Price, discount: product.Discount
+                });
+
+            }
+        }
+    }
+
+    detailsRows.sort((a, b) => {
+        if (a.name > b.name) {
+            return 1;
+        } else if (a.name < b.name) {
+            return -1;
+        } else {
+            return 0;
+        }
+    });
+    const detailsGroupedRows$ = from(detailsRows).pipe(
+        groupBy(row => row.name),
+        mergeMap(group => zip(of(group.key), group.pipe(reduce((total, cur) => total + cur.qty, 0)), group.pipe(toArray())))
+    );
+
+    detailsSheetData.push([
+        'TÊN THUỐC/BS', undefined, undefined, 'SL'
+    ]);
+    detailsMerge.push(
+        { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
+    );
+
+    let detailsSumTotalQty = 0;
+    detailsGroupedRows$.subscribe((z) => {
+        detailsSheetData.push([
+            z[0], undefined, undefined, z[1],
+        ]);
+        detailsMerge.push(
+            { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
+        );
+
+        const doctors = z[2];
+        doctors.sort(sortFullName);
+        for (let doctor of doctors) {
+            detailsSumTotalQty += doctor.qty;
+            const { firstName: fName, lastName: lName } = getFirstAndLastName(doctor.doctor);
+            detailsSheetData.push([
+                undefined, lName, fName, doctor.qty
+            ]);
+        }
+
+    });
+
+    detailsSheetData.push([
+        'TỔNG CỘNG', undefined, undefined, detailsSumTotalQty
+    ]);
+    detailsMerge.push(
+        { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
+    );
+
+    rows.sort((a, b) => {
+        if (a.name > b.name) {
+            return 1;
+        } else if (a.name < b.name) {
+            return -1;
+        } else {
+            return 0;
+        }
+    });
+
+    const groupedRows$ = from(rows).pipe(
+        groupBy(row => row.name),
+        mergeMap(group => group
+            .pipe(
+                reduce((total, cur) => {
+                    total.qty += cur.qty;
+                    total.price = cur.price;
+                    total.discount = cur.discount;
+                    return total;
+                }, {
+                    name: group.key, qty: 0, price: undefined, discount: undefined
+                })
+            )
+        ),
+        toArray()
+    );
+
+    sheetData.push([
+        'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', 'CK', 'TCK'
+    ]);
+
+    let sumTotalQty = 0;
+    let sumTotalAmount = 0;
+    let sumTotalDiscountAmount = 0;
+    groupedRows$.subscribe((rows) => {
+        for (let row of rows) {
+            const amount = row.qty * row.price;
+            const discountAmount = amount * row.discount / 100;
+            sumTotalQty += row.qty;
+            sumTotalAmount += amount;
+            sumTotalDiscountAmount += discountAmount;
+            sheetData.push([
+                row.name, row.qty, row.price, amount, row.discount, discountAmount
+            ]);
+        }
+
+    });
+
+    sheetData.push([
+        'TỔNG', sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscountAmount
+    ]);
+
+    sheetData.push([]);
+
+    // Report Summary
+    sheetData.push([]);
+    sheetData.push(['File này được sinh ra bởi LamGift']);
+    sheetData.push(['Powered by Lý Văn Khải - 0986 409 026 - roboticscm2018@gmail.com']);
+    const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
+
+    detailsSheetData.push([]);
+    detailsSheetData.push(['File này được sinh ra bởi LamGift']);
+    detailsSheetData.push(['Powered by Lý Văn Khải - 0986 409 026 - roboticscm2018@gmail.com']);
+    const detailsWorksheet = xlsx.utils.aoa_to_sheet(detailsSheetData);
+
+    currencyFormat(xlsx, worksheet, 'B');
+    currencyFormat(xlsx, worksheet, 'C');
+    currencyFormat(xlsx, worksheet, 'D');
+    currencyFormat(xlsx, worksheet, 'E');
+    currencyFormat(xlsx, worksheet, 'F');
+
+    currencyFormat(xlsx, detailsWorksheet, 'D');
+
+    worksheet["!merges"] = merge;
+    detailsWorksheet["!merges"] = detailsMerge;
+
+    const wscols = [
+        { wch: 30 },
+        { wch: 7 },
+        { wch: 7 },
+        { wch: 15 },
+        { wch: 5 },
+        { wch: 15 },
+    ];
+
+    worksheet['!cols'] = wscols;
+
+    const dwscols = [
+        { wch: 5 },
+        { wch: 20 },
+        { wch: 6 },
+        { wch: 10 },
+    ];
+    detailsWorksheet['!cols'] = dwscols;
+
+    workbook.Sheets['Summary'] = worksheet;
+    workbook.Sheets['Details'] = detailsWorksheet;
+    xlsx.writeFile(workbook, `${getDestPath()}/${excelFileName}.xlsx`);
 }

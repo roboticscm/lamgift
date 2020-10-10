@@ -1,5 +1,5 @@
-import { detailsParse, summaryParse, exportProduct } from './parse';
-import { sourcePath, doctorProductPath, doctorFullName, qty, productId, productName } from './constant';
+import { detailsParse, summaryParse, exportProduct, productDoctorParse } from './parse';
+import { sourcePath, doctorProductPath, productDoctorPath, doctorFullName, qty, productId, productName } from './constant';
 import { sourceToJson } from './lib';
 
 export const checkSourceFile = () => {
@@ -19,37 +19,76 @@ export const checkSourceFile = () => {
                     result: false
                 });
             } else {
+                // source
+                const source = sourceToJson(`${sourcePath}/${sourceFiles[0]}`);
+                // export product
+                exportProduct(source);
+
+                // doctor -> product
                 fs.readdir(doctorProductPath, (error, files) => {
                     const configFiles = files.filter(f => f !== '.DS_Store' && !f.startsWith('~'));
                     const totalFiles = configFiles.length;
-                    if (totalFiles === 0) {
-                        reject({
-                            message: `Ban chua cau hinh trinh duoc vien trong thu muc: ${doctorProductPath}`,
-                            result: false
-                        });
-                    } else {
-                        // source
-                        const source = sourceToJson(`${sourcePath}/${sourceFiles[0]}`);
+                    // pharmaceutical representatives
+                    for (let file of configFiles) {
+                        const prJson = pharmaceuticalRepresentativesToJson(`${doctorProductPath}/${file}`);
+                        //detailsParse(source, prJson);
+                        summaryParse(source, prJson);
+                    }
 
-                        // export product
-                        exportProduct(source);
+                    resolve({
+                        result: true,
+                        message: 'Success'
+                    })
+                });
 
-                        // pharmaceutical representatives
-                        for (let file of configFiles) {
-                            const prJson = pharmaceuticalRepresentativesToJson(`${doctorProductPath}/${file}`);
-                            // detailsParse(source, prJson);
-                            summaryParse(source, prJson);
+
+
+                // product -> doctor
+                fs.readdir(productDoctorPath, (error, files) => {
+                    const configFiles = files.filter(f => f !== '.DS_Store' && !f.startsWith('~'));
+                    const totalFiles = configFiles.length;
+                    // pharmaceutical representatives
+                    for (let file of configFiles) {
+                        const prJson = productDoctorToJson(`${productDoctorPath}/${file}`);
+
+                        const productDoctorList = [];
+                        let prevProduct;
+                        for (let row of prJson.data) {
+                            if (row.ProductId || row.ProductName) {
+                                prevProduct = row;
+                                productDoctorList.push(prevProduct);
+                            } else {
+                                if (!prevProduct.doctors) {
+                                    prevProduct.doctors = [];
+                                }
+                                prevProduct.doctors.push(row);
+                            }
                         }
 
-                        resolve({
-                            result: true,
-                            message: 'Success'
-                        })
 
+                        productDoctorList.sort((a, b) => {
+                            if (a.ProductName > b.ProductName) {
+                                return 1;
+                            } else if (a.ProductName < b.ProductName) {
+                                return -1;
+                            } else {
+                                return 0;
+                            }
+                        });
+
+                        productDoctorParse(source, productDoctorList,
+                            prJson.pharmaceuticalRepresentatives
+                        );
                     }
+
+                    resolve({
+                        result: true,
+                        message: 'Success'
+                    })
                 });
 
             }
+
         });
     });
 }
@@ -90,6 +129,29 @@ const pharmaceuticalRepresentativesToJson = (sourceFileName) => {
     return {
         pharmaceuticalRepresentatives,
         data: result
+    };
+}
+
+const productDoctorToJson = (sourceFileName) => {
+    const xlsx = require('xlsx');
+
+    const workbook = xlsx.readFile(sourceFileName);
+    if (workbook.SheetNames.length === 0) {
+        return undefined;
+    }
+    let pharmaceuticalRepresentatives;
+
+    const prJson = xlsx.utils.sheet_to_json(workbook.Sheets['Info']);
+    if (prJson && prJson.length > 0) {
+        pharmaceuticalRepresentatives = {
+            fullName: prJson[0].FullName,
+            phoneNumber: prJson[0].PhoneNumber,
+            email: prJson[0].Email,
+        };
+    }
+    return {
+        pharmaceuticalRepresentatives,
+        data: xlsx.utils.sheet_to_json(workbook.Sheets["Index"])
     };
 }
 

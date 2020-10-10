@@ -1,5 +1,6 @@
 export const sourcePath = 'dist/document/source';
 export const doctorProductPath = 'dist/document/doctor_product';
+export const productDoctorPath = 'dist/document/product_doctor';
 export const priceListPath = 'dist/document/price_list';
 export const destPath = 'dist/document/dest';
 export const doctorFullName = 'Họ - Tên Bsĩ';
