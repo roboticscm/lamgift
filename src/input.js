@@ -1,6 +1,7 @@
 import { detailsParse, summaryParse, exportProduct, productDoctorParse } from './parse';
 import { sourcePath, doctorProductPath, productDoctorPath, doctorFullName, qty, productId, productName } from './constant';
 import { sourceToJson } from './lib';
+import { exportDoctor } from './doctor';
 
 export const checkSourceFile = () => {
     return new Promise((resolve, reject) => {
@@ -23,6 +24,7 @@ export const checkSourceFile = () => {
                 const source = sourceToJson(`${sourcePath}/${sourceFiles[0]}`);
                 // export product
                 exportProduct(source);
+                exportDoctor(source);
 
                 // doctor -> product
                 fs.readdir(doctorProductPath, (error, files) => {

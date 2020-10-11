@@ -164,13 +164,11 @@ export const summaryParse = (source, prJson) => {
 
     // Report Summary
     sheetData.push([]);
-    sheetData.push(['File này được sinh ra bởi LamGift']);
-    sheetData.push(['Powered by Lý Văn Khải - 0986 409 026 - roboticscm2018@gmail.com']);
+    sheetData.push(['File này được sinh ra bởi Yến Phạm']);
     const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
 
     detailsSheetData.push([]);
-    detailsSheetData.push(['File này được sinh ra bởi LamGift']);
-    detailsSheetData.push(['Powered by Lý Văn Khải - 0986 409 026 - roboticscm2018@gmail.com']);
+    detailsSheetData.push(['File này được sinh ra bởi Yến Phạm']);
     const detailsWorksheet = xlsx.utils.aoa_to_sheet(detailsSheetData);
 
     currencyFormat(xlsx, worksheet, 'B');
@@ -426,8 +424,7 @@ export const detailsParse = (source, prJson) => {
     //     );
     // }
     sheetData.push([]);
-    sheetData.push(['File này được sinh ra bởi LamGift']);
-    sheetData.push(['Powered by Lý Văn Khải - 0986 409 026 - roboticscm2018@gmail.com']);
+    sheetData.push(['File này được sinh ra bởi Yến Phạm']);
     const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
 
 
@@ -501,12 +498,12 @@ const getCurrentMonthYear = () => {
     return { month, year };
 }
 
-const getDestPath = () => {
+export const getDestPath = () => {
     const { month, year } = getCurrentMonthYear();
     return `${destPath}/${year}/${month}`;
 }
 
-const currencyFormat = (xlsx, worksheet, column) => {
+export const currencyFormat = (xlsx, worksheet, column) => {
     const col = xlsx.utils.decode_col(column); // 1
     const fmt = '#,##0';
     const range = xlsx.utils.decode_range(worksheet['!ref']);
@@ -518,7 +515,7 @@ const currencyFormat = (xlsx, worksheet, column) => {
     }
 }
 
-const getDoctorNickname = (name) => {
+export const getDoctorNickname = (name) => {
     const s = name.split('-');
 
     if (s.length > 1) {
@@ -557,7 +554,7 @@ const sortFullName = (a, b, field = "doctor") => {
     }
 }
 
-const getUnaccentcFirstAndLastName = (name) => {
+export const getUnaccentcFirstAndLastName = (name) => {
     if (!name) {
         return { lastName: undefined, firstName: undefined };
     }
@@ -684,7 +681,7 @@ export const getShortProductName = (name) => {
 }
 
 
-const getDoctorShortName = (name) => {
+export const getDoctorShortName = (name) => {
     const sn = name.split('-');
     let fullName;
     if (sn.length > 1) {
@@ -865,13 +862,11 @@ export const productDoctorParse = (source, prJson, pr) => {
 
     // Report Summary
     sheetData.push([]);
-    sheetData.push(['File này được sinh ra bởi LamGift']);
-    sheetData.push(['Powered by Lý Văn Khải - 0986 409 026 - roboticscm2018@gmail.com']);
+    sheetData.push(['File này được sinh ra bởi Yến Phạm']);
     const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
 
     detailsSheetData.push([]);
-    detailsSheetData.push(['File này được sinh ra bởi LamGift']);
-    detailsSheetData.push(['Powered by Lý Văn Khải - 0986 409 026 - roboticscm2018@gmail.com']);
+    detailsSheetData.push(['File này được sinh ra bởi Yến Phạm']);
     const detailsWorksheet = xlsx.utils.aoa_to_sheet(detailsSheetData);
 
     currencyFormat(xlsx, worksheet, 'B');
