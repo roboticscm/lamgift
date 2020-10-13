@@ -21,10 +21,9 @@
   },
   "homepage": "https://github.com/roboticscm/lamgift#readme",
   "dependencies": {
+    "exceljs": "^4.1.1",
     "rxjs": "^6.6.3",
-    "sheetjs-style": "^0.15.6",
-    "xlsx": "^0.16.8",
-    "xlsx-style": "^0.8.13"
+    "xlsx": "^0.16.8"
   },
   "devDependencies": {
     "cross-env": "^7.0.2",

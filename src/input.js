@@ -1,5 +1,5 @@
-import { detailsParse, summaryParse, exportProduct, productDoctorParse } from './parse';
-import { sourcePath, doctorProductPath, productDoctorPath, doctorFullName, qty, productId, productName } from './constant';
+import { detailsParse, summaryParse, exportProduct, productDoctorParse, exportPrSummary } from './parse';
+import { sourcePath, doctorProductPath, productDoctorPath, productDate, doctorFullName, qty, productId, productName } from './constant';
 import { sourceToJson } from './lib';
 import { exportDoctor } from './doctor';
 
@@ -30,65 +30,75 @@ export const checkSourceFile = () => {
                 fs.readdir(doctorProductPath, (error, files) => {
                     const configFiles = files.filter(f => f !== '.DS_Store' && !f.startsWith('~'));
                     const totalFiles = configFiles.length;
+                    const prSummary = [];
                     // pharmaceutical representatives
                     for (let file of configFiles) {
                         const prJson = pharmaceuticalRepresentativesToJson(`${doctorProductPath}/${file}`);
                         detailsParse(source, prJson);
-                        summaryParse(source, prJson);
+                        const result = summaryParse(source, prJson);
+                        prSummary.push(result);
                     }
 
-                    resolve({
-                        result: true,
-                        message: 'Success'
-                    })
-                });
 
+                    // product -> doctor
+                    fs.readdir(productDoctorPath, (error, files) => {
+                        const configFiles = files.filter(f => f !== '.DS_Store' && !f.startsWith('~'));
+                        const totalFiles = configFiles.length;
+                        // pharmaceutical representatives
+                        for (let file of configFiles) {
+                            const prJson = productDoctorToJson(`${productDoctorPath}/${file}`);
 
-
-                // product -> doctor
-                fs.readdir(productDoctorPath, (error, files) => {
-                    const configFiles = files.filter(f => f !== '.DS_Store' && !f.startsWith('~'));
-                    const totalFiles = configFiles.length;
-                    // pharmaceutical representatives
-                    for (let file of configFiles) {
-                        const prJson = productDoctorToJson(`${productDoctorPath}/${file}`);
-
-                        const productDoctorList = [];
-                        let prevProduct;
-                        for (let row of prJson.data) {
-                            if (row.ProductId || row.ProductName) {
-                                prevProduct = row;
-                                productDoctorList.push(prevProduct);
-                            } else {
-                                if (!prevProduct.doctors) {
-                                    prevProduct.doctors = [];
+                            const productDoctorList = [];
+                            let prevProduct;
+                            for (let row of prJson.data) {
+                                if (row.ProductId || row.ProductName) {
+                                    prevProduct = row;
+                                    productDoctorList.push(prevProduct);
+                                } else {
+                                    if (!prevProduct.doctors) {
+                                        prevProduct.doctors = [];
+                                    }
+                                    prevProduct.doctors.push(row);
                                 }
-                                prevProduct.doctors.push(row);
                             }
+
+
+                            productDoctorList.sort((a, b) => {
+                                if (a.ProductName > b.ProductName) {
+                                    return 1;
+                                } else if (a.ProductName < b.ProductName) {
+                                    return -1;
+                                } else {
+                                    return 0;
+                                }
+                            });
+
+                            const result = productDoctorParse(source, productDoctorList,
+                                prJson.pharmaceuticalRepresentatives
+                            );
+
+                            prSummary.push(result);
                         }
 
-
-                        productDoctorList.sort((a, b) => {
-                            if (a.ProductName > b.ProductName) {
+                        prSummary.sort((a, b) => {
+                            if (a[0] > b[0]) {
                                 return 1;
-                            } else if (a.ProductName < b.ProductName) {
+                            } else if (a[0] < b[0]) {
                                 return -1;
                             } else {
                                 return 0;
                             }
-                        });
+                        })
+                        exportPrSummary(source[0][productDate], prSummary);
+                    });
 
-                        productDoctorParse(source, productDoctorList,
-                            prJson.pharmaceuticalRepresentatives
-                        );
-                    }
+
 
                     resolve({
                         result: true,
-                        message: 'Success'
+                        message: 'Success',
                     })
                 });
-
             }
 
         });

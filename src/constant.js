@@ -1,3 +1,5 @@
+import { useSecuredMethod } from './index';
+
 export const sourcePath = 'dist/document/source';
 export const doctorPath = 'dist/document/doctor';
 export const doctorProductPath = 'dist/document/doctor_product';
@@ -16,3 +18,9 @@ export const pName = 'TEN';
 export const pPrice = 'GIA';
 export const pDiscount = 'CK';
 export const pDoctorDiscount = 'CKBS';
+
+export const company = 'Công ty TNHH Dược Phẩm Hoàng Trân';
+export const shortCompany = 'Công ty TNHH DP Hoàng Trân';
+export const copyright = 'File này được sinh ra bởi Yến Phạm';
+export const doctorTitle = 'Bác Sĩ';
+export const prTitle = 'Trình Dược Viên';

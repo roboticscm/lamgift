@@ -1,59 +1,39 @@
-import { priceListPath, sourcePath, doctorProductPath, destPath, pName, pPrice, pDiscount, pDoctorDiscount, productDate, productId, doctorFullName, productName, qty as quantity, pId } from './constant';
-import { unaccentVietnamese, sourceToJson } from './lib';
+import { prTitle, doctorTitle, priceListPath, sourcePath, doctorProductPath, destPath, pName, pPrice, pDiscount, pDoctorDiscount, productDate, productId, doctorFullName, productName, qty as quantity, pId, copyright } from './constant';
+import { unaccentVietnamese, sourceToJson, saveExcelFile, borderExcel, formatCellHeader, formatReportTitle, formatReportFooter } from './lib';
 import { from, of, zip } from 'rxjs';
 import { groupBy, mergeMap, reduce, toArray, map } from 'rxjs/operators';
+import { useSecuredMethod, hideZeroRow } from './index';
 
 export const summaryParse = (source, prJson) => {
-    const xlsx = require('xlsx');
-
-    const workbook = xlsx.utils.book_new();
-
-    workbook.Props = {
-        Title: 'LamGift',
-        Author: 'Ly Van Khai 0986 409 026',
-        Subject: 'Excel Generator',
-    }
-    workbook.SheetNames.push('Summary');
-    workbook.SheetNames.push('Details');
-
     const fs = require('fs');
     const excelFileName = unaccentVietnamese(prJson.pharmaceuticalRepresentatives.fullName);
     fs.mkdirSync(getDestPath(), { recursive: true });
-    // fs.mkdirSync(`${getDestPath()}/${excelFileName}`, { recursive: true });
 
     const sheetData = [];
     const detailsSheetData = [];
-    const merge = [];
-    const detailsMerge = [];
-    const { month, year } = getCurrentMonthYear();
     sheetData.push([
-        `Tháng: ${month}/${year}`
-    ]);
-    sheetData.push([
-        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện thoại>'}  - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
+        `${prTitle}: ${prJson.pharmaceuticalRepresentatives.fullName}`
     ]);
 
-    sheetData.push([]);
+    sheetData.push(['BẢNG CHIẾT KHẤU TỔNG HỢP']);
+    sheetData.push([undefined, undefined, undefined, undefined, undefined, undefined, source[0][productDate]]);
 
     detailsSheetData.push([
-        `Tháng: ${month}/${year}`
+        `${prTitle}: ${prJson.pharmaceuticalRepresentatives.fullName}`
     ]);
-    detailsSheetData.push([
-        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện thoại>'} - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
-    ]);
-
-    detailsSheetData.push([]);
+    detailsSheetData.push(['BẢNG CHIẾT KHẤU CHI TIẾT']);
+    detailsSheetData.push([undefined, undefined, undefined, undefined, source[0][productDate]]);
     const rows = [];
     const detailsRows = [];
     for (let doctor of prJson.data) {
         for (let product of doctor.data) {
             const qty = sumQty(source, getDoctorName(doctor.doctor), product[pName], product[pId]);
-            if (qty) {
+            if (qty || !hideZeroRow) {
                 rows.push(
-                    { name: product[pName], qty, price: product[pPrice], discount: product[pDiscount] }
+                    { name: product[pName], qty: qty ? qty : 0, price: product[pPrice], discount: product[pDiscount] }
                 );
                 detailsRows.push({
-                    doctor: getDoctorName(doctor.doctor), name: product[pName], qty, price: product[pPrice], discount: product[pDiscount]
+                    doctor: getDoctorName(doctor.doctor), name: product[pName], qty: qty ? qty : 0, price: product[pPrice], discount: product[pDiscount]
                 });
             }
         }
@@ -74,39 +54,32 @@ export const summaryParse = (source, prJson) => {
     );
 
     detailsSheetData.push([
-        'TÊN THUỐC/BS', undefined, undefined, 'SL'
+        'STT', 'TÊN THUỐC/BS', undefined, undefined, 'SL'
     ]);
-    detailsMerge.push(
-        { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
-    );
 
     let detailsSumTotalQty = 0;
+    let productRowCount = 0;
     detailsGroupedRows$.subscribe((z) => {
         detailsSheetData.push([
-            z[0], undefined, undefined, z[1],
+            ++productRowCount, z[0], undefined, undefined, z[1],
         ]);
-        detailsMerge.push(
-            { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
-        );
 
         const doctors = z[2];
         doctors.sort(sortFullName);
+        let doctorRowCount = 0;
         for (let doctor of doctors) {
             detailsSumTotalQty += doctor.qty;
             const { firstName: fName, lastName: lName } = getFirstAndLastName(doctor.doctor);
             detailsSheetData.push([
-                undefined, lName, fName, doctor.qty
+                undefined, ++doctorRowCount, lName, fName, doctor.qty
             ]);
         }
 
     });
 
     detailsSheetData.push([
-        'TỔNG CỘNG', undefined, undefined, detailsSumTotalQty
+        'TỔNG CỘNG', undefined, undefined, undefined, detailsSumTotalQty
     ]);
-    detailsMerge.push(
-        { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
-    );
 
     rows.sort((a, b) => {
         if (a.name > b.name) {
@@ -136,13 +109,14 @@ export const summaryParse = (source, prJson) => {
     );
 
     sheetData.push([
-        'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', 'CK', 'TCK'
+        'STT', 'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', 'CK', 'TCK'
     ]);
 
     let sumTotalQty = 0;
     let sumTotalAmount = 0;
     let sumTotalDiscountAmount = 0;
     groupedRows$.subscribe((rows) => {
+        let rowNum = 0;
         for (let row of rows) {
             const amount = row.qty * row.price;
             const discountAmount = amount * row.discount / 100;
@@ -150,102 +124,136 @@ export const summaryParse = (source, prJson) => {
             sumTotalAmount += amount;
             sumTotalDiscountAmount += discountAmount;
             sheetData.push([
-                row.name, row.qty, row.price, amount, row.discount, discountAmount
+                ++rowNum, row.name, row.qty, row.price, amount, row.discount, discountAmount
             ]);
         }
 
     });
 
     sheetData.push([
-        'TỔNG', sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscountAmount
+        'TỔNG', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscountAmount
     ]);
 
-    sheetData.push([]);
 
-    // Report Summary
-    sheetData.push([]);
-    sheetData.push(['File này được sinh ra bởi Yến Phạm']);
-    const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
-
-    detailsSheetData.push([]);
-    detailsSheetData.push(['File này được sinh ra bởi Yến Phạm']);
-    const detailsWorksheet = xlsx.utils.aoa_to_sheet(detailsSheetData);
-
-    currencyFormat(xlsx, worksheet, 'B');
-    currencyFormat(xlsx, worksheet, 'C');
-    currencyFormat(xlsx, worksheet, 'D');
-    currencyFormat(xlsx, worksheet, 'E');
-    currencyFormat(xlsx, worksheet, 'F');
-
-    currencyFormat(xlsx, detailsWorksheet, 'D');
-
-    worksheet["!merges"] = merge;
-    detailsWorksheet["!merges"] = detailsMerge;
-
-    const wscols = [
-        { wch: 30 },
-        { wch: 7 },
-        { wch: 7 },
-        { wch: 15 },
-        { wch: 5 },
-        { wch: 15 },
+    saveExcelFile(`${getDestPath()}/${excelFileName}.xlsx`, sheetData, "Tổng Hợp", summaryParseFormat, true, detailsSheetData, "Chi Tiết", summaryParseFormat2);
+    return [
+        prJson.pharmaceuticalRepresentatives.fullName, sumTotalQty, sumTotalAmount, sumTotalDiscountAmount
     ];
+}
 
-    worksheet['!cols'] = wscols;
+const summaryParseFormat = (worksheet) => {
+    worksheet.pageSetup.margins = {
+        left: 0.2, right: 0.2,
+        top: 0.45, bottom: 0.45,
+        header: 0.2, footer: 0.2
+    };
+    worksheet.pageSetup.horizontalCentered = true;
+    worksheet.pageSetup.orientation = 'landscape';
 
-    const dwscols = [
-        { wch: 5 },
-        { wch: 20 },
-        { wch: 6 },
-        { wch: 10 },
-    ];
-    detailsWorksheet['!cols'] = dwscols;
+    const headerRowNumber = 5;
+    const allColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    //format report title
+    formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
 
-    workbook.Sheets['Summary'] = worksheet;
-    workbook.Sheets['Details'] = detailsWorksheet;
-    xlsx.writeFile(workbook, `${getDestPath()}/${excelFileName}.xlsx`);
+    // right align date
+    worksheet.getCell(`${allColumns[allColumns.length - 1]}${headerRowNumber - 1}`).alignment = { horizontal: 'right', vertical: 'middle' };
+    // center align column header
+    allColumns.map(it => {
+        formatCellHeader(worksheet, headerRowNumber, it);
+    });
+
+    // Report summary
+    allColumns.map(it => {
+        formatCellHeader(worksheet, worksheet.rowCount - 2, it, false);
+    });
+    worksheet.mergeCells(`A${worksheet.rowCount - 2}:B${worksheet.rowCount - 2}`);
+    worksheet.getCell(`A${worksheet.rowCount - 2}`).style.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // border content
+    borderExcel(worksheet, headerRowNumber, worksheet.rowCount - 2, allColumns);
+
+    // Format Number
+    ['C', 'D', 'E', 'F', 'G'].map(it => {
+        worksheet.getColumn(it).numFmt = '#,##0';
+    });
+
+    // set column width
+    [5, 50, 12, 12, 20, 7, 16].map((it, index) => {
+        worksheet.getColumn(index + 1).width = it;
+    });
+}
+
+const summaryParseFormat2 = (worksheet) => {
+    const headerRowNumber = 5;
+    const allColumns = ['A', 'B', 'C', 'D', 'E'];
+    //format report title
+    formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
+
+    // right align date
+    worksheet.getCell(`${allColumns[allColumns.length - 1]}${headerRowNumber - 1}`).alignment = { horizontal: 'right', vertical: 'middle' };
+    // center align column header
+    allColumns.map(it => {
+        formatCellHeader(worksheet, headerRowNumber, it);
+    });
+
+    worksheet.eachRow((row, rowNumber) => {
+        if (row.values[1] && rowNumber > headerRowNumber && rowNumber < worksheet.rowCount - 2) {
+            worksheet.mergeCells(`B${rowNumber}:D${rowNumber}`);
+            for (let i = 1; i <= allColumns.length; i++) {
+                const cell = worksheet.getCell(`${allColumns[i - 1]}${rowNumber}`);
+                cell.style.font = { ...cell.style.font, bold: true };
+            }
+
+        } else if (rowNumber === headerRowNumber) {
+            worksheet.mergeCells(`B${rowNumber}:D${rowNumber}`);
+        } else if (rowNumber === worksheet.rowCount - 2) {
+            worksheet.mergeCells(`A${rowNumber}:D${rowNumber}`);
+        }
+    });
+
+    // Report summary
+    allColumns.map(it => {
+        formatCellHeader(worksheet, worksheet.rowCount - 2, it, false);
+    });
+    // worksheet.mergeCells(`A${worksheet.rowCount - 2}:B${worksheet.rowCount - 2}`);
+    worksheet.getCell(`A${worksheet.rowCount - 2}`).style.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // border content
+    borderExcel(worksheet, headerRowNumber, worksheet.rowCount - 2, allColumns);
+
+    // Format Number
+    worksheet.getColumn('E').numFmt = '#,##0';
+
+    // set column width
+    [5, 5, 50, 12, 20].map((it, index) => {
+        worksheet.getColumn(index + 1).width = it;
+    });
 }
 
 export const detailsParse = (source, prJson) => {
-    const xlsx = require('xlsx');
-
-    const workbook = xlsx.utils.book_new();
-    workbook.Props = {
-        Title: 'LamGift',
-        Author: 'Ly Van Khai 0986 409 026',
-        Subject: 'Excel Generator',
-    }
-
-    workbook.SheetNames.push('Index');
-
     const fs = require('fs');
     const excelFileName = unaccentVietnamese(prJson.pharmaceuticalRepresentatives.fullName);
-    fs.mkdirSync(getDestPath(), { recursive: true });
     fs.mkdirSync(`${getDestPath()}/${excelFileName}`, { recursive: true });
 
     const sheetData = [];
-    const merge = [];
-
-    sheetData.push([
-        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện Thoại>'} - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
-    ]);
-
-
-
     let sumTotalQty = 0;
     let sumTotalAmount = 0;
     let sumTotalDiscount = 0;
     let sumTotalDoctorDiscount = 0;
 
     let usedDoctorDiscount = true;
-    for (let doctor of prJson.data) {
-        const doctorMerge = [];
-        const doctorSheetData = [];
-        doctorSheetData.push([
-            `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName} - ${prJson.pharmaceuticalRepresentatives.phoneNumber || '<Điện Thoại>'} - ${prJson.pharmaceuticalRepresentatives.email || '<Email>'}`
-        ]);
+    sheetData.push([
+        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName}`
+    ]);
 
-        let count = 1;
+    sheetData.push([
+        `BẢNG TÍNH TIỀN CHIẾT KHẤU`
+    ]);
+
+    for (let doctor of prJson.data) {
+        const doctorSheetData = [];
+
+        let count = 0;
         let totalQty = 0;
         let totalAmount = 0;
         let totalDiscountAmount = 0;
@@ -258,8 +266,11 @@ export const detailsParse = (source, prJson) => {
         const doctorRows = [];
 
         for (let product of doctor.data) {
-            const qty = sumQty(source, getDoctorName(doctor.doctor), product[pName], product[pId]);
-            if (qty) {
+            let qty = sumQty(source, getDoctorName(doctor.doctor), product[pName], product[pId]);
+            if (qty || !hideZeroRow) {
+                if (qty === undefined) {
+                    qty = 0;
+                }
                 const amount = qty * product[pPrice];
                 const discountAmout = amount * product[pDiscount] / 100;
 
@@ -274,19 +285,17 @@ export const detailsParse = (source, prJson) => {
 
                 if (usedDoctorDiscount) {
                     rows.push([
-                        count, product[pName], qty, product[pPrice], amount, product[pDiscount], discountAmout, product[pDoctorDiscount], doctorDiscountAmount, remain
+                        ++count, getShortProductName(product[pName]), qty, product[pPrice], amount, product[pDiscount], discountAmout, product[pDoctorDiscount], doctorDiscountAmount, remain
                     ]);
 
                     doctorRows.push([
-                        count, product[pName], qty, product[pPrice], amount, product[pDoctorDiscount], doctorDiscountAmount
+                        count, getShortProductName(product[pName], useSecuredMethod), qty, product[pPrice], amount, product[pDoctorDiscount], doctorDiscountAmount
                     ]);
                 } else {
                     rows.push([
-                        count, product[pName], qty, product[pPrice], amount, product[pDiscount], discountAmout
+                        ++count, getShortProductName(product[pName]), qty, product[pPrice], amount, product[pDiscount], discountAmout
                     ]);
                 }
-
-
 
                 totalQty += qty;
                 totalAmount += amount;
@@ -300,7 +309,6 @@ export const detailsParse = (source, prJson) => {
                     sumTotalDoctorDiscount += doctorDiscountAmount;
                     totalRemain += remain;
                 }
-                count++;
                 hasData = true;
             }
 
@@ -308,26 +316,29 @@ export const detailsParse = (source, prJson) => {
 
         if (hasData) {
             sheetData.push([]);
-            sheetData.push([
-                `BS: ${getDoctorName(doctor.doctor)}`
-            ]);
             if (usedDoctorDiscount) {
                 sheetData.push([
-                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% Chiết khấu', 'Chiết Khấu', '% CKBS', 'CKBS', 'Còn lại'
+                    `${doctorTitle}: ${useSecuredMethod ? getDoctorNickname(doctor.doctor) : doctor.doctor}`, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, source[0][productDate]
                 ]);
             } else {
                 sheetData.push([
-                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% Chiết khấu', 'Chiết Khấu'
+                    `${doctorTitle}: ${useSecuredMethod ? getDoctorNickname(doctor.doctor) : doctor.doctor}`, undefined, undefined, undefined, undefined, undefined, source[0][productDate]
+                ]);
+            }
+            if (usedDoctorDiscount) {
+                sheetData.push([
+                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK', '% CKBS', 'CKBS', 'Còn lại'
+                ]);
+            } else {
+                sheetData.push([
+                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK'
                 ]);
             }
             sheetData.push(
                 ...rows
             );
 
-            const lastRow = sheetData.length;
-            merge.push(
-                { s: { r: lastRow, c: 0 }, e: { r: lastRow, c: 1 } }
-            );
+
             // Doctor Summary
             if (usedDoctorDiscount) {
                 sheetData.push([
@@ -339,24 +350,29 @@ export const detailsParse = (source, prJson) => {
                 ]);
             }
 
-
-            // for doctor report
-            doctorSheetData.push([]);
-            doctorSheetData.push([
-                `BS: ${getDoctorNickname(doctor.doctor)}`
-            ]);
             if (usedDoctorDiscount) {
                 doctorSheetData.push([
-                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'Chiết Khấu'
+                    'STT', 'Sản Phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK'
                 ]);
             }
             doctorSheetData.push(
                 ...doctorRows
             );
 
-            doctorMerge.push(
-                { s: { r: doctorSheetData.length, c: 0 }, e: { r: doctorSheetData.length, c: 1 } }
-            );
+
+            if (usedDoctorDiscount) {
+                doctorSheetData.unshift([
+                    `${useSecuredMethod ? 'Khách hàng' : doctorTitle}: ${useSecuredMethod ? getDoctorNickname(doctor.doctor) : getDoctorName(doctor.doctor)}`
+                ]);
+            }
+
+            doctorSheetData.unshift([
+                useSecuredMethod ? source[0][productDate] : `PHÍ THÁNG (${source[0][productDate]})`
+            ]);
+            doctorSheetData.unshift([
+                `${prTitle}: ${prJson.pharmaceuticalRepresentatives.fullName}`
+            ]);
+
             // Doctor Summary
             if (usedDoctorDiscount) {
                 doctorSheetData.push([
@@ -364,109 +380,109 @@ export const detailsParse = (source, prJson) => {
                 ]);
             }
 
-            const doctorWorksheet = xlsx.utils.aoa_to_sheet(doctorSheetData);
-            currencyFormat(xlsx, doctorWorksheet, 'C');
-            currencyFormat(xlsx, doctorWorksheet, 'D');
-            currencyFormat(xlsx, doctorWorksheet, 'E');
-            currencyFormat(xlsx, doctorWorksheet, 'F');
-            currencyFormat(xlsx, doctorWorksheet, 'G');
-
-            doctorWorksheet["!merges"] = doctorMerge;
-
-            const wscols = [
-                { wch: 6 },
-                { wch: 30 },
-                { wch: 6 },
-                { wch: 7 },
-                { wch: 15 },
-                { wch: 6 },
-                { wch: 12 },
-            ];
-
-            doctorWorksheet['!cols'] = wscols;
-
-            const doctorWorkbook = xlsx.utils.book_new();
-            doctorWorkbook.Props = {
-                Title: 'LamGift',
-                Author: 'Ly Van Khai 0986 409 026',
-                Subject: 'Excel Generator',
-            }
-
-            doctorWorkbook.SheetNames.push('Index');
-
-            doctorWorkbook.Sheets['Index'] = doctorWorksheet;
-
             // write doctor discount
-            xlsx.writeFile(doctorWorkbook, `${getDestPath()}/${excelFileName}/${unaccentVietnamese(getDoctorNickname(doctor.doctor))}_${getDoctorShortName(doctor.doctor)}.xlsx`);
+            saveExcelFile(`${getDestPath()}/${excelFileName}/${unaccentVietnamese(getDoctorNickname(doctor.doctor))}_${getDoctorShortName(doctor.doctor)}.xlsx`, doctorSheetData, "Index", doctorParseFormat, false);
         }
     }
-
-    sheetData.push([]);
 
     // Report Summary
     if (usedDoctorDiscount) {
         sheetData.push([
-            'Tổng cộng', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscount, undefined, sumTotalDoctorDiscount, sumTotalDiscount - sumTotalDoctorDiscount
+            'Tổng cộng tất cả', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscount, undefined, sumTotalDoctorDiscount, sumTotalDiscount - sumTotalDoctorDiscount
         ]);
     } else {
         sheetData.push([
-            'Tổng cộng', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscount
+            'Tổng cộng tất cả', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscount
         ]);
     }
-    // if (usedDoctorDiscount) {
-    //     sheetData.push([
-    //         'Tổng tiền chiết khấu còn lại của Trình dược', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, sumTotalRemain
-    //     ]);
-
-    //     const lastRow = sheetData.length - 1;
-    //     merge.push(
-    //         { s: { r: lastRow, c: 0 }, e: { r: lastRow, c: 8 } }
-    //     );
-    // }
-    sheetData.push([]);
-    sheetData.push(['File này được sinh ra bởi Yến Phạm']);
-    const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
 
 
-    currencyFormat(xlsx, worksheet, 'C');
-    currencyFormat(xlsx, worksheet, 'D');
-    currencyFormat(xlsx, worksheet, 'E');
-    currencyFormat(xlsx, worksheet, 'F');
-    currencyFormat(xlsx, worksheet, 'G');
-    currencyFormat(xlsx, worksheet, 'H');
-    currencyFormat(xlsx, worksheet, 'I');
-    currencyFormat(xlsx, worksheet, 'J');
-
-
-    worksheet["!merges"] = merge;
-
-    const wscols = [
-        { wch: 6 },
-        { wch: 30 },
-        { wch: 10 },
-        { wch: 12 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-    ];
-
-    // worksheet["A5"].s = {
-    //     font: { sz: 23, bold: true, },
-    //     alignment: {
-    //         horizontal: "center", vertical: "center", wrap_text: true
-    //     }
-    // };
-
-    worksheet['!cols'] = wscols;
-
-    workbook.Sheets['Index'] = worksheet;
-    xlsx.writeFile(workbook, `${getDestPath()}/${excelFileName}/index.xlsx`);
+    saveExcelFile(`${getDestPath()}/${excelFileName}/index.xlsx`, sheetData, "Index", (worksheet) => detailsParseIndexFormat(worksheet, usedDoctorDiscount));
 }
 
+const detailsParseIndexFormat = (worksheet, usedDoctorDiscount) => {
+    worksheet.pageSetup.margins = {
+        left: 0.2, right: 0.2,
+        top: 0.45, bottom: 0.45,
+        header: 0.2, footer: 0.2
+    };
+    worksheet.pageSetup.horizontalCentered = true;
+    worksheet.pageSetup.orientation = 'landscape';
+    const headerRowNumber = 6;
+    const allColumns = usedDoctorDiscount ? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] : ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    //format report title
+    formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
 
+
+    // center align column header
+    worksheet.eachRow((row, rowNumber) => {
+        if (row.values[1] && `${row.values[1]}`.startsWith(`${doctorTitle}:`)) {
+            // right align date
+            worksheet.getCell(`${allColumns[allColumns.length - 1]}${rowNumber}`).alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+        else if (row.values[1] === 'STT') {
+            allColumns.map(it => {
+                formatCellHeader(worksheet, rowNumber, it);
+            });
+        } else if (row.values[1] === 'Tổng cộng' || row.values[1] === 'Tổng cộng tất cả') {
+            // Report summary
+            allColumns.map(it => {
+                formatCellHeader(worksheet, rowNumber, it, false);
+            });
+            worksheet.mergeCells(`A${rowNumber}:B${rowNumber}`);
+            worksheet.getCell(`A${rowNumber}`).style.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+    });
+
+
+
+    // border content
+    borderExcel(worksheet, headerRowNumber, worksheet.rowCount - 2, allColumns);
+
+    // Format Number
+    ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map(it => {
+        worksheet.getColumn(it).numFmt = '#,##0';
+    });
+
+    // set column width
+    [5, 15, 10, 10, 18, 7, 17, 7, 17, 15].map((it, index) => {
+        worksheet.getColumn(index + 1).width = it;
+    });
+}
+
+const doctorParseFormat = (worksheet) => {
+    const headerRowNumber = 5;
+    const allColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    //format report title
+    formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
+
+    // right align date
+    worksheet.getCell(`${allColumns[allColumns.length - 1]}${headerRowNumber - 1}`).alignment = { horizontal: 'right', vertical: 'middle' };
+    // center align column header
+    allColumns.map(it => {
+        formatCellHeader(worksheet, headerRowNumber, it);
+    });
+
+    // Report summary
+    allColumns.map(it => {
+        formatCellHeader(worksheet, worksheet.rowCount - 2, it, false);
+    });
+    worksheet.mergeCells(`A${worksheet.rowCount - 2}:B${worksheet.rowCount - 2}`);
+    worksheet.getCell(`A${worksheet.rowCount - 2}`).style.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // border content
+    borderExcel(worksheet, headerRowNumber, worksheet.rowCount - 2, allColumns);
+
+    // Format Number
+    ['C', 'D', 'E', 'F', 'G'].map(it => {
+        worksheet.getColumn(it).numFmt = '#,##0';
+    });
+
+    // set column width
+    [5, 18, 10, 10, 18, 7, 17].map((it, index) => {
+        worksheet.getColumn(index + 1).width = it;
+    });
+}
 
 const sumQty = (source, doctor, name, id) => {
     const filterProducts = source.filter((it) => {
@@ -590,8 +606,6 @@ const getFirstAndLastName = (name) => {
 export const exportProduct = (source) => {
     const pId = 'Mã thuốc';
     const pName = 'Tên thuốc';
-
-    const xlsx = require('xlsx');
     const fs = require('fs');
 
     let priceList;
@@ -623,51 +637,36 @@ export const exportProduct = (source) => {
                 if (list && list.length > 0) {
                     list.sort((a, b) => sortFullName(a, b, doctorFullName));
 
-                    const workbook = xlsx.utils.book_new();
-
-                    workbook.Props = {
-                        Title: 'LamGift',
-                        Author: 'Ly Van Khai 0986 409 026',
-                        Subject: 'Excel Generator',
-                    }
-                    workbook.SheetNames.push('Index');
                     const sheetData = [];
-
-                    sheetData.push([
-                        'Ngày', 'Họ lót BS', 'Tên BS', 'Thuốc', 'SL'
-                    ]);
                     let sumQty = 0;
+                    let count = 0;
                     for (let row of list) {
                         const { lastName: lName, firstName: fName } = getFirstAndLastName(row[doctorFullName]);
                         sumQty += row[quantity];
                         sheetData.push([
-                            row[productDate], lName, fName, row[productName], row[quantity]
+                            ++count, row[productDate], lName, fName, row[quantity]
                         ]);
                     }
 
+                    sheetData.unshift([
+                        'STT', 'Ngày', 'Họ lót BS', 'Tên BS', 'SL'
+                    ]);
+
+
+                    sheetData.unshift([
+                        undefined, undefined, undefined, undefined, source[0][productDate]
+                    ]);
+
+                    sheetData.unshift([
+                        `BÁO CÁO TÌNH HÌNH MUA BÁN THUỐC ${getShortProductName(product[pName]).toUpperCase()}`
+                    ]);
+
+                    sheetData.unshift([]);
                     sheetData.push([
                         'Tổng cộng', undefined, undefined, undefined, sumQty
                     ]);
-                    const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
-                    const wscols = [
-                        { wch: 20 },
-                        { wch: 20 },
-                        { wch: 10 },
-                        { wch: 35 },
-                        { wch: 10 },
-                    ];
-                    worksheet['!cols'] = wscols;
 
-                    const merge = [];
-                    merge.push(
-                        { s: { r: sheetData.length - 1, c: 0 }, e: { r: sheetData.length - 1, c: 3 } }
-                    );
-                    currencyFormat(xlsx, worksheet, 'E');
-                    worksheet["!merges"] = merge;
-
-
-                    workbook.Sheets['Index'] = worksheet;
-                    xlsx.writeFile(workbook, `${getDestPath()}/products/${getShortProductName(product[pName])}.xlsx`);
+                    saveExcelFile(`${getDestPath()}/products/${getShortProductName(product[pName])}.xlsx`, sheetData, "Index", prProductFormat);
                 }
 
             }
@@ -675,9 +674,46 @@ export const exportProduct = (source) => {
     });
 }
 
+const prProductFormat = (worksheet) => {
+    const headerRowNumber = 5;
+    const allColumns = ['A', 'B', 'C', 'D', 'E'];
+    //format report title
+    formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
 
-export const getShortProductName = (name) => {
-    return name.replace(/\(.*?\)/, '').trim();
+    // right align date
+    worksheet.getCell('E4').alignment = { horizontal: 'right', vertical: 'middle' };
+    // center align column header
+    allColumns.map(it => {
+        formatCellHeader(worksheet, headerRowNumber, it);
+    });
+
+    // Report summary
+    allColumns.map(it => {
+        formatCellHeader(worksheet, worksheet.rowCount - 2, it, false);
+    });
+
+    worksheet.mergeCells(`A${worksheet.rowCount - 2}:D${worksheet.rowCount - 2}`);
+    worksheet.getCell(`A${worksheet.rowCount - 2}`).style.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // border content
+    borderExcel(worksheet, headerRowNumber, worksheet.rowCount - 2, allColumns);
+
+    // Format Number
+    worksheet.getColumn('E').numFmt = '#,##0';
+
+    // set column width
+    [5, 30, 25, 11, 12].map((it, index) => {
+        worksheet.getColumn(index + 1).width = it;
+    });
+}
+
+export const getShortProductName = (name, useSecuredMethod = false) => {
+    const shortName = name.replace(/\(.*?\)/, '').trim();
+    if (useSecuredMethod) {
+        return shortName.substring(0, 4) + '*'.repeat(shortName.length - 4);
+    } else {
+        return shortName;
+    }
 }
 
 
@@ -702,55 +738,40 @@ export const getDoctorShortName = (name) => {
 
 
 export const productDoctorParse = (source, prJson, pr) => {
-    const xlsx = require('xlsx');
-
-    const workbook = xlsx.utils.book_new();
-
-    workbook.Props = {
-        Title: 'LamGift',
-        Author: 'Ly Van Khai 0986 409 026',
-        Subject: 'Excel Generator',
-    }
-    workbook.SheetNames.push('Summary');
-    workbook.SheetNames.push('Details');
-
     const fs = require('fs');
     const excelFileName = unaccentVietnamese(pr.fullName);
     fs.mkdirSync(getDestPath(), { recursive: true });
 
     const sheetData = [];
     const detailsSheetData = [];
-    const merge = [];
-    const detailsMerge = [];
-    const { month, year } = getCurrentMonthYear();
+
     sheetData.push([
-        `Tháng: ${month}/${year}`
-    ]);
-    sheetData.push([
-        `Trình dược viên: ${pr.fullName} - ${pr.phoneNumber || '<Điện thoại>'} - ${pr.email || '<Email>'}`
+        `${prTitle}: ${pr.fullName}`
     ]);
 
-    sheetData.push([]);
+    sheetData.push(['BẢNG CHIẾT KHẤU TỔNG HỢP']);
+    sheetData.push([undefined, undefined, undefined, undefined, undefined, undefined, source[0][productDate]]);
 
     detailsSheetData.push([
-        `Tháng: ${month}/${year}`
+        `${prTitle}: ${pr.fullName}`
     ]);
-    detailsSheetData.push([
-        `Trình dược viên: ${pr.fullName} - ${pr.phoneNumber || '<Điện thoại>'} - ${pr.email || '<Email>'}`
-    ]);
+    detailsSheetData.push(['BẢNG CHIẾT KHẤU CHI TIẾT']);
+    detailsSheetData.push([undefined, undefined, undefined, undefined, source[0][productDate]]);
 
-    detailsSheetData.push([]);
     const rows = [];
     const detailsRows = [];
     for (let product of prJson) {
         for (let doctor of product.doctors) {
-            const qty = sumQty(source, doctor.DoctorName, product.ProductName, product.ProductId);
-            if (qty) {
+            let qty = sumQty(source, doctor.DoctorName, product.ProductName, product.ProductId);
+            if (qty || !hideZeroRow) {
+                if (qty === undefined) {
+                    qty = 0;
+                }
                 rows.push(
-                    { name: product.ProductName, qty, price: product.Price, discount: product.Discount }
+                    { name: product.ProductName, qty: qty != undefined ? qty : 0, price: product.Price, discount: product.Discount }
                 );
                 detailsRows.push({
-                    doctor: doctor.DoctorName, name: product.ProductName, qty, price: product.Price, discount: product.Discount
+                    doctor: doctor.DoctorName, name: product.ProductName, qty: qty != undefined ? qty : 0, price: product.Price, discount: product.Discount
                 });
 
             }
@@ -772,39 +793,32 @@ export const productDoctorParse = (source, prJson, pr) => {
     );
 
     detailsSheetData.push([
-        'TÊN THUỐC/BS', undefined, undefined, 'SL'
+        'STT', 'TÊN THUỐC/BS', undefined, undefined, 'SL'
     ]);
-    detailsMerge.push(
-        { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
-    );
 
     let detailsSumTotalQty = 0;
+    let rowCount = 0;
     detailsGroupedRows$.subscribe((z) => {
         detailsSheetData.push([
-            z[0], undefined, undefined, z[1],
+            ++rowCount, z[0], undefined, undefined, z[1],
         ]);
-        detailsMerge.push(
-            { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
-        );
 
         const doctors = z[2];
         doctors.sort(sortFullName);
+        let doctorRowCount = 0;
         for (let doctor of doctors) {
             detailsSumTotalQty += doctor.qty;
             const { firstName: fName, lastName: lName } = getFirstAndLastName(doctor.doctor);
             detailsSheetData.push([
-                undefined, lName, fName, doctor.qty
+                undefined, ++doctorRowCount, lName, fName, doctor.qty
             ]);
         }
 
     });
 
     detailsSheetData.push([
-        'TỔNG CỘNG', undefined, undefined, detailsSumTotalQty
+        'TỔNG CỘNG', undefined, undefined, undefined, detailsSumTotalQty
     ]);
-    detailsMerge.push(
-        { s: { r: detailsSheetData.length - 1, c: 0 }, e: { r: detailsSheetData.length - 1, c: 2 } }
-    );
 
     rows.sort((a, b) => {
         if (a.name > b.name) {
@@ -834,13 +848,14 @@ export const productDoctorParse = (source, prJson, pr) => {
     );
 
     sheetData.push([
-        'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', 'CK', 'TCK'
+        'STT', 'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', 'CK', 'TCK'
     ]);
 
     let sumTotalQty = 0;
     let sumTotalAmount = 0;
     let sumTotalDiscountAmount = 0;
     groupedRows$.subscribe((rows) => {
+        let rowCount = 0;
         for (let row of rows) {
             const amount = row.qty * row.price;
             const discountAmount = amount * row.discount / 100;
@@ -848,58 +863,93 @@ export const productDoctorParse = (source, prJson, pr) => {
             sumTotalAmount += amount;
             sumTotalDiscountAmount += discountAmount;
             sheetData.push([
-                row.name, row.qty, row.price, amount, row.discount, discountAmount
+                ++rowCount, row.name, row.qty, row.price, amount, row.discount, discountAmount
             ]);
         }
 
     });
 
     sheetData.push([
-        'TỔNG', sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscountAmount
+        'TỔNG', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscountAmount
     ]);
 
-    sheetData.push([]);
+    saveExcelFile(`${getDestPath()}/${excelFileName}.xlsx`, sheetData, "Tổng Hợp", summaryParseFormat, true, detailsSheetData, "Chi Tiết", summaryParseFormat2);
 
-    // Report Summary
-    sheetData.push([]);
-    sheetData.push(['File này được sinh ra bởi Yến Phạm']);
-    const worksheet = xlsx.utils.aoa_to_sheet(sheetData);
-
-    detailsSheetData.push([]);
-    detailsSheetData.push(['File này được sinh ra bởi Yến Phạm']);
-    const detailsWorksheet = xlsx.utils.aoa_to_sheet(detailsSheetData);
-
-    currencyFormat(xlsx, worksheet, 'B');
-    currencyFormat(xlsx, worksheet, 'C');
-    currencyFormat(xlsx, worksheet, 'D');
-    currencyFormat(xlsx, worksheet, 'E');
-    currencyFormat(xlsx, worksheet, 'F');
-
-    currencyFormat(xlsx, detailsWorksheet, 'D');
-
-    worksheet["!merges"] = merge;
-    detailsWorksheet["!merges"] = detailsMerge;
-
-    const wscols = [
-        { wch: 30 },
-        { wch: 7 },
-        { wch: 7 },
-        { wch: 15 },
-        { wch: 5 },
-        { wch: 15 },
+    return [
+        pr.fullName, sumTotalQty, sumTotalAmount, sumTotalDiscountAmount
     ];
+}
 
-    worksheet['!cols'] = wscols;
 
-    const dwscols = [
-        { wch: 5 },
-        { wch: 20 },
-        { wch: 6 },
-        { wch: 10 },
-    ];
-    detailsWorksheet['!cols'] = dwscols;
+export const exportPrSummary = (date, data) => {
+    let count = 1;
+    let sumQty = 0;
+    let sumAmount = 0;
+    let sumDiscount = 0;
+    data = data.map((it) => {
+        sumQty += it[1];
+        sumAmount += it[2];
+        sumDiscount += it[3];
 
-    workbook.Sheets['Summary'] = worksheet;
-    workbook.Sheets['Details'] = detailsWorksheet;
-    xlsx.writeFile(workbook, `${getDestPath()}/${excelFileName}.xlsx`);
+        it.unshift(count++);
+        return it;
+    });
+
+    data.unshift([
+        'STT', 'Trình Dược', 'SL', 'Doanh Số', 'Chiết Khấu', 'Ghi Chú'
+    ]);
+
+
+    data.unshift([
+        undefined, undefined, undefined, undefined, undefined, `${date}`
+    ]);
+
+    data.unshift([
+        'BẢNG CHIẾT KHẤU TỔNG HỢP'
+    ]);
+
+    data.unshift([
+    ]);
+
+    data.push([
+        'Tổng Cộng', undefined, sumQty, sumAmount, sumDiscount
+    ]);
+
+    const fs = require('fs');
+    fs.mkdirSync(`${getDestPath()}`, { recursive: true });
+    saveExcelFile(`${getDestPath()}/_summary.xlsx`, data, "Index", prSummaryFormat);
+}
+
+const prSummaryFormat = (worksheet) => {
+    const headerRowNumber = 5;
+    const allColumns = ['A', 'B', 'C', 'D', 'E', 'F'];
+    //format report title
+    formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
+
+    // right align date
+    worksheet.getCell('F4').alignment = { horizontal: 'right', vertical: 'middle' };
+    // center align column header
+    allColumns.map(it => {
+        formatCellHeader(worksheet, headerRowNumber, it);
+    });
+
+    // Report summary
+    allColumns.map(it => {
+        formatCellHeader(worksheet, worksheet.rowCount - 2, it, false);
+    });
+    worksheet.mergeCells(`A${worksheet.rowCount - 2}:B${worksheet.rowCount - 2}`);
+    worksheet.getCell(`A${worksheet.rowCount - 2}`).style.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // border content
+    borderExcel(worksheet, headerRowNumber, worksheet.rowCount - 2, allColumns);
+
+    // Format Number
+    ['C', 'D', 'E'].map(it => {
+        worksheet.getColumn(it).numFmt = '#,##0';
+    });
+
+    // set column width
+    [5, 15, 10, 20, 17, 12].map((it, index) => {
+        worksheet.getColumn(index + 1).width = it;
+    });
 }

@@ -1,3 +1,5 @@
+import { copyright, company, shortCompany } from './constant';
+
 export const unaccentVietnamese = (str) => {
     str = str.toLowerCase();
     //     We can also use this instead of from line 11 to line 17
@@ -31,4 +33,126 @@ export const sourceToJson = (sourceFileName) => {
     }
 
     return xlsx.utils.sheet_to_json(worksheet);
+}
+
+export const saveExcelFile = async (fileName, data, sheetName = "Index", customFunction, showFullCompany = true, data2, sheetName2, customFunction2) => {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(sheetName);
+    let worksheet2;
+    if (sheetName2) {
+        worksheet2 = workbook.addWorksheet(sheetName2);
+    }
+
+    data.unshift([
+        showFullCompany ? company : shortCompany
+    ]);
+    // Report Summary
+    data.push([]);
+    data.push([copyright]);
+    worksheet.addRows(data);
+
+    if (data2 && worksheet2) {
+        data2.unshift([
+            showFullCompany ? company : shortCompany
+        ]);
+        data2.push([]);
+        data2.push([copyright]);
+        worksheet2.addRows(data2);
+    }
+
+    setFontAndSizeExcel(worksheet);
+    setDefaultRowHeight(worksheet);
+
+    if (worksheet2) {
+        setFontAndSizeExcel(worksheet2);
+        setDefaultRowHeight(worksheet2);
+
+    }
+
+    if (customFunction) {
+        customFunction(worksheet);
+    }
+
+    if (customFunction2) {
+        customFunction2(worksheet2);
+    }
+    // foramt report summary
+    formatReportFooter(worksheet.getCell(`A${worksheet.rowCount}`));
+    if (worksheet2) {
+        formatReportFooter(worksheet2.getCell(`A${worksheet2.rowCount}`));
+    }
+
+    return await workbook.xlsx.writeFile(fileName);
+}
+
+export const setFontAndSizeExcel = (worksheet, fontFamily = 'Tahoma', fontSize = 12) => {
+    for (let col = 1; col <= worksheet.columnCount; col++) {
+        worksheet.getColumn(col).eachCell((cell, rowNumber) => {
+            cell.style = { font: { name: fontFamily, size: fontSize } }
+        });
+    }
+}
+
+
+export const borderExcel = (worksheet, fromRow, toRow, columns) => {
+    const border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+    };
+
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber >= fromRow && rowNumber <= toRow) {
+            columns.map((it) => {
+                worksheet.getCell(`${it}${rowNumber}`).border = border;
+            });
+        }
+    });
+}
+
+
+export const formatCellHeader = (worksheet, row, column, centerAlignment = true, fillColor = true) => {
+
+    const cell = worksheet.getCell(`${column}${row}`);
+
+    cell.style.font = { name: 'Tahoma', size: 13, bold: true };
+
+    if (centerAlignment) {
+        cell.style.alignment = { horizontal: 'center', vertical: 'middle' };
+    }
+
+    // increase header height
+    worksheet.getRow(row).height = 20;
+
+    // fill gray background
+    if (fillColor) {
+        cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFe1dbdb' }
+        };
+    }
+
+}
+
+export const formatReportTitle = (worksheet, row, startColumn, endColumn) => {
+    const cell = worksheet.getCell(`A${row}`);
+    cell.style.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.style.font = { name: 'Tahoma', size: 16, bold: true };
+    worksheet.mergeCells(`${startColumn}${row}:${endColumn}${row}`);
+
+    worksheet.getRow(row).height = 22;
+}
+
+export const setDefaultRowHeight = (worksheet, height = 16) => {
+    for (let i = 1; i <= worksheet.rowCount; i++) {
+        worksheet.getRow(i).height = height;
+        worksheet.getRow(i).alignment = { vertical: 'middle' };
+    }
+}
+
+export const formatReportFooter = (cell) => {
+    cell.style.font = { ...cell.style.font, italic: true, color: { argb: 'FF7b7979' } };
 }
