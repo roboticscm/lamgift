@@ -7,7 +7,7 @@ const alias = {
 
 module.exports = {
   target: 'node', // ignore built-in modules like path, fs, etc.
-  // externals: [nodeExternals()],
+  externals: [nodeExternals()],
   // entry: {
   //   bundle: ['./src/index.js'],
   // },

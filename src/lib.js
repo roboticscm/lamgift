@@ -84,6 +84,28 @@ export const saveExcelFile = async (fileName, data, sheetName = "Index", customF
     }
 
     return await workbook.xlsx.writeFile(fileName);
+
+    // if (fileName.includes('khai/index')) {
+    //     const libre = require('libreoffice-convert');
+
+    //     const fs = require('fs');
+
+    //     const extend = '.pdf'
+
+    //     // Read file
+    //     const file = fs.readFileSync(fileName);
+    //     // Convert it to pdf format with undefined filter (see Libreoffice doc about filter)
+    //     libre.convert(file, extend, undefined, (err, done) => {
+    //         if (err) {
+    //             console.log(`Error converting file: ${err}`);
+    //         }
+
+    //         // Here in done you have pdf file which you can save or transfer in another stream
+    //         fs.writeFileSync(fileName.replace('.xlsx', extend), done);
+    //     });
+    // }
+
+
 }
 
 export const setFontAndSizeExcel = (worksheet, fontFamily = 'Tahoma', fontSize = 12) => {

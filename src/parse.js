@@ -2,7 +2,7 @@ import { prTitle, doctorTitle, priceListPath, sourcePath, doctorProductPath, des
 import { unaccentVietnamese, sourceToJson, saveExcelFile, borderExcel, formatCellHeader, formatReportTitle, formatReportFooter } from './lib';
 import { from, of, zip } from 'rxjs';
 import { groupBy, mergeMap, reduce, toArray, map } from 'rxjs/operators';
-import { useSecuredMethod, hideZeroRow } from './index';
+import { useSecuredMethod, hideZeroRow, showAmountColumn } from './index';
 
 export const summaryParse = (source, prJson) => {
     const fs = require('fs');
@@ -30,7 +30,7 @@ export const summaryParse = (source, prJson) => {
             const qty = sumQty(source, getDoctorName(doctor.doctor), product[pName], product[pId]);
             if (qty || !hideZeroRow) {
                 rows.push(
-                    { name: product[pName], qty: qty ? qty : 0, price: product[pPrice], discount: product[pDiscount] }
+                    { name: `${product[pName]}(${product[pDiscount]})`, qty: qty ? qty : 0, price: product[pPrice], discount: product[pDiscount] }
                 );
                 detailsRows.push({
                     doctor: getDoctorName(doctor.doctor), name: product[pName], qty: qty ? qty : 0, price: product[pPrice], discount: product[pDiscount]
@@ -124,7 +124,7 @@ export const summaryParse = (source, prJson) => {
             sumTotalAmount += amount;
             sumTotalDiscountAmount += discountAmount;
             sheetData.push([
-                ++rowNum, row.name, row.qty, row.price, amount, row.discount, discountAmount
+                ++rowNum, removeDiscount(row.name), row.qty, row.price, amount, row.discount, discountAmount
             ]);
         }
 
@@ -178,7 +178,7 @@ const summaryParseFormat = (worksheet) => {
     });
 
     // set column width
-    [5, 50, 12, 12, 20, 7, 16].map((it, index) => {
+    [5, 50, 12, 12, 20, 7, 20].map((it, index) => {
         worksheet.getColumn(index + 1).width = it;
     });
 }
@@ -288,8 +288,10 @@ export const detailsParse = (source, prJson) => {
                         ++count, getShortProductName(product[pName]), qty, product[pPrice], amount, product[pDiscount], discountAmout, product[pDoctorDiscount], doctorDiscountAmount, remain
                     ]);
 
-                    doctorRows.push([
+                    doctorRows.push(showAmountColumn ? [
                         count, getShortProductName(product[pName], useSecuredMethod), qty, product[pPrice], amount, product[pDoctorDiscount], doctorDiscountAmount
+                    ] : [
+                        count, getShortProductName(product[pName], useSecuredMethod), qty, product[pPrice], product[pDoctorDiscount], doctorDiscountAmount
                     ]);
                 } else {
                     rows.push([
@@ -351,9 +353,11 @@ export const detailsParse = (source, prJson) => {
             }
 
             if (usedDoctorDiscount) {
-                doctorSheetData.push([
+                doctorSheetData.push( showAmountColumn ? [
                     'STT', 'Sản Phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK'
-                ]);
+                ] : [
+                    'STT', 'Sản Phẩm', 'SL', 'Đơn giá', '% CK', 'CK'
+                ] );
             }
             doctorSheetData.push(
                 ...doctorRows
@@ -362,12 +366,12 @@ export const detailsParse = (source, prJson) => {
 
             if (usedDoctorDiscount) {
                 doctorSheetData.unshift([
-                    `${useSecuredMethod ? 'Khách hàng' : doctorTitle}: ${useSecuredMethod ? getDoctorNickname(doctor.doctor) : getDoctorName(doctor.doctor)}`
+                    `${useSecuredMethod ? 'Kính gửi khách hàng' : 'Kính gửi ' + doctorTitle}: ${useSecuredMethod ? getDoctorNickname(doctor.doctor) : getDoctorName(doctor.doctor)}`
                 ]);
             }
 
             doctorSheetData.unshift([
-                useSecuredMethod ? source[0][productDate] : `PHÍ THÁNG (${source[0][productDate]})`
+                source[0][productDate]
             ]);
             doctorSheetData.unshift([
                 `${prTitle}: ${prJson.pharmaceuticalRepresentatives.fullName}`
@@ -375,8 +379,10 @@ export const detailsParse = (source, prJson) => {
 
             // Doctor Summary
             if (usedDoctorDiscount) {
-                doctorSheetData.push([
+                doctorSheetData.push(showAmountColumn ? [
                     'Tổng cộng', undefined, totalQty, undefined, totalAmount, undefined, totalDoctorDiscountAmount
+                ]: [
+                    'Tổng cộng', undefined, totalQty, undefined, undefined, totalDoctorDiscountAmount
                 ]);
             }
 
@@ -452,7 +458,7 @@ const detailsParseIndexFormat = (worksheet, usedDoctorDiscount) => {
 
 const doctorParseFormat = (worksheet) => {
     const headerRowNumber = 5;
-    const allColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const allColumns = showAmountColumn ? ['A', 'B', 'C', 'D', 'E', 'F', 'G'] : ['A', 'B', 'C', 'D', 'E', 'F'];
     //format report title
     formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
 
@@ -479,7 +485,7 @@ const doctorParseFormat = (worksheet) => {
     });
 
     // set column width
-    [5, 18, 10, 10, 18, 7, 17].map((it, index) => {
+    (showAmountColumn ? [5, 18, 10, 10, 18, 7, 17] : [5, 23, 12, 13, 10, 20]).map((it, index) => {
         worksheet.getColumn(index + 1).width = it;
     });
 }
@@ -708,6 +714,7 @@ const prProductFormat = (worksheet) => {
 }
 
 export const getShortProductName = (name, useSecuredMethod = false) => {
+    name = name.replace('/', '-');
     const shortName = name.replace(/\(.*?\)/, '').trim();
     if (useSecuredMethod) {
         return shortName.substring(0, 4) + '*'.repeat(shortName.length - 4);
@@ -949,7 +956,12 @@ const prSummaryFormat = (worksheet) => {
     });
 
     // set column width
-    [5, 15, 10, 20, 17, 12].map((it, index) => {
+    [5, 13, 12, 20, 20, 10].map((it, index) => {
         worksheet.getColumn(index + 1).width = it;
     });
+}
+
+
+const removeDiscount = (name) => {
+    return name.replace(/\([0-9]{1,2}\)/, '').trim();
 }

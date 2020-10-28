@@ -23,4 +23,4 @@ export const company = 'Công ty TNHH Dược Phẩm Hoàng Trân';
 export const shortCompany = 'Công ty TNHH DP Hoàng Trân';
 export const copyright = 'File này được sinh ra bởi Yến Phạm';
 export const doctorTitle = 'Bác Sĩ';
-export const prTitle = 'Trình Dược Viên';
+export const prTitle = 'TDV';
