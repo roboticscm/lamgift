@@ -12,16 +12,16 @@ export const summaryParse = (source, prJson) => {
     const sheetData = [];
     const detailsSheetData = [];
     sheetData.push([
-        `${prTitle}: ${prJson.pharmaceuticalRepresentatives.fullName}`
+        `${prJson.pharmaceuticalRepresentatives.fullName}`
     ]);
 
-    sheetData.push(['BẢNG CHIẾT KHẤU TỔNG HỢP']);
-    sheetData.push([undefined, undefined, undefined, undefined, undefined, undefined, source[0][productDate]]);
+    sheetData.push(['BẢNG TỔNG HỢP']);
+    sheetData.push(showAmountColumn ?  [undefined, undefined, undefined, undefined, undefined, undefined, source[0][productDate]] : [undefined, undefined, undefined, undefined, undefined, source[0][productDate]]);
 
     detailsSheetData.push([
-        `${prTitle}: ${prJson.pharmaceuticalRepresentatives.fullName}`
+        `${prJson.pharmaceuticalRepresentatives.fullName}`
     ]);
-    detailsSheetData.push(['BẢNG CHIẾT KHẤU CHI TIẾT']);
+    detailsSheetData.push(['BẢNG CHI TIẾT']);
     detailsSheetData.push([undefined, undefined, undefined, undefined, source[0][productDate]]);
     const rows = [];
     const detailsRows = [];
@@ -54,7 +54,7 @@ export const summaryParse = (source, prJson) => {
     );
 
     detailsSheetData.push([
-        'STT', 'TÊN THUỐC/BS', undefined, undefined, 'SL'
+        'STT', 'TÊN/BS', undefined, undefined, 'SL'
     ]);
 
     let detailsSumTotalQty = 0;
@@ -108,8 +108,10 @@ export const summaryParse = (source, prJson) => {
         toArray()
     );
 
-    sheetData.push([
-        'STT', 'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', 'CK', 'TCK'
+    sheetData.push(showAmountColumn ?  [
+        'STT', 'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', '%CK', 'CK'
+    ] : [
+        'STT', 'TÊN', 'SL', 'ĐƠN GIÁ', '%CK', 'CK'
     ]);
 
     let sumTotalQty = 0;
@@ -123,19 +125,23 @@ export const summaryParse = (source, prJson) => {
             sumTotalQty += row.qty;
             sumTotalAmount += amount;
             sumTotalDiscountAmount += discountAmount;
-            sheetData.push([
+            sheetData.push(showAmountColumn ?  [
                 ++rowNum, removeDiscount(row.name), row.qty, row.price, amount, row.discount, discountAmount
+            ] : [
+                ++rowNum, removeDiscount(row.name), row.qty, row.price, row.discount, discountAmount
             ]);
         }
 
     });
 
-    sheetData.push([
+    sheetData.push(showAmountColumn ?  [
         'TỔNG', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscountAmount
+    ] : [
+        'TỔNG', undefined, sumTotalQty, undefined, undefined, sumTotalDiscountAmount
     ]);
 
 
-    saveExcelFile(`${getDestPath()}/${excelFileName}.xlsx`, sheetData, "Tổng Hợp", summaryParseFormat, true, detailsSheetData, "Chi Tiết", summaryParseFormat2);
+    saveExcelFile(`${getDestPath()}/${excelFileName}.xlsx`, sheetData, "Tổng Hợp", summaryParseFormat, false, detailsSheetData, "Chi Tiết", summaryParseFormat2);
     return [
         prJson.pharmaceuticalRepresentatives.fullName, sumTotalQty, sumTotalAmount, sumTotalDiscountAmount
     ];
@@ -148,10 +154,13 @@ const summaryParseFormat = (worksheet) => {
         header: 0.2, footer: 0.2
     };
     worksheet.pageSetup.horizontalCentered = true;
-    worksheet.pageSetup.orientation = 'landscape';
+    if(showAmountColumn) {
+        worksheet.pageSetup.orientation = 'landscape';
+    } 
+   
 
     const headerRowNumber = 5;
-    const allColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const allColumns = showAmountColumn ? ['A', 'B', 'C', 'D', 'E', 'F', 'G'] : ['A', 'B', 'C', 'D', 'E', 'F'];
     //format report title
     formatReportTitle(worksheet, 3, allColumns[0], allColumns[allColumns.length - 1]);
 
@@ -178,7 +187,7 @@ const summaryParseFormat = (worksheet) => {
     });
 
     // set column width
-    [5, 50, 12, 12, 20, 7, 20].map((it, index) => {
+    (showAmountColumn ? [5, 40, 12, 12, 20, 7, 20] : [7, 35, 10, 12, 8, 15]).map((it, index) => {
         worksheet.getColumn(index + 1).width = it;
     });
 }
@@ -225,7 +234,7 @@ const summaryParseFormat2 = (worksheet) => {
     worksheet.getColumn('E').numFmt = '#,##0';
 
     // set column width
-    [5, 5, 50, 12, 20].map((it, index) => {
+    [5, 7, 35, 12, 15].map((it, index) => {
         worksheet.getColumn(index + 1).width = it;
     });
 }
@@ -243,11 +252,11 @@ export const detailsParse = (source, prJson) => {
 
     let usedDoctorDiscount = true;
     sheetData.push([
-        `Trình dược viên: ${prJson.pharmaceuticalRepresentatives.fullName}`
+        `${prJson.pharmaceuticalRepresentatives.fullName}`
     ]);
 
     sheetData.push([
-        `BẢNG TÍNH TIỀN CHIẾT KHẤU`
+        `BẢNG TÍNH TIỀN PHÍ`
     ]);
 
     for (let doctor of prJson.data) {
@@ -329,11 +338,11 @@ export const detailsParse = (source, prJson) => {
             }
             if (usedDoctorDiscount) {
                 sheetData.push([
-                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK', '% CKBS', 'CKBS', 'Còn lại'
+                    'STT', 'SP', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK', '% CKBácS', 'CKBS', 'Còn lại'
                 ]);
             } else {
                 sheetData.push([
-                    'STT', 'Sản phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK'
+                    'STT', 'SP', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK'
                 ]);
             }
             sheetData.push(
@@ -354,9 +363,9 @@ export const detailsParse = (source, prJson) => {
 
             if (usedDoctorDiscount) {
                 doctorSheetData.push( showAmountColumn ? [
-                    'STT', 'Sản Phẩm', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK'
+                    'STT', 'SP', 'SL', 'Đơn giá', 'Thành Tiền', '% CK', 'CK'
                 ] : [
-                    'STT', 'Sản Phẩm', 'SL', 'Đơn giá', '% CK', 'CK'
+                    'STT', 'SP', 'SL', 'Đơn giá', '% CK', 'CK'
                 ] );
             }
             doctorSheetData.push(
@@ -374,7 +383,7 @@ export const detailsParse = (source, prJson) => {
                 source[0][productDate]
             ]);
             doctorSheetData.unshift([
-                `${prTitle}: ${prJson.pharmaceuticalRepresentatives.fullName}`
+                `${prJson.pharmaceuticalRepresentatives.fullName}`
             ]);
 
             // Doctor Summary
@@ -387,7 +396,7 @@ export const detailsParse = (source, prJson) => {
             }
 
             // write doctor discount
-            saveExcelFile(`${getDestPath()}/${excelFileName}/${unaccentVietnamese(getDoctorNickname(doctor.doctor))}_${getDoctorShortName(doctor.doctor)}.xlsx`, doctorSheetData, "Index", doctorParseFormat, false);
+            saveExcelFile(`${getDestPath()}/${excelFileName}/${unaccentVietnamese(getDoctorNickname(doctor.doctor))}_${getDoctorShortName(doctor.doctor)}.xlsx`, doctorSheetData, "Index", doctorParseFormat, true);
         }
     }
 
@@ -753,16 +762,19 @@ export const productDoctorParse = (source, prJson, pr) => {
     const detailsSheetData = [];
 
     sheetData.push([
-        `${prTitle}: ${pr.fullName}`
+        `${pr.fullName}`
     ]);
 
-    sheetData.push(['BẢNG CHIẾT KHẤU TỔNG HỢP']);
-    sheetData.push([undefined, undefined, undefined, undefined, undefined, undefined, source[0][productDate]]);
+    sheetData.push(['BẢNG TỔNG HỢP']);
+    sheetData.push(showAmountColumn ? 
+        [undefined, undefined, undefined, undefined, undefined, undefined, source[0][productDate]] : 
+        [undefined, undefined, undefined, undefined, undefined, source[0][productDate]]
+        );
 
     detailsSheetData.push([
-        `${prTitle}: ${pr.fullName}`
+        `${pr.fullName}`
     ]);
-    detailsSheetData.push(['BẢNG CHIẾT KHẤU CHI TIẾT']);
+    detailsSheetData.push(['BẢNG CHI TIẾT']);
     detailsSheetData.push([undefined, undefined, undefined, undefined, source[0][productDate]]);
 
     const rows = [];
@@ -800,7 +812,7 @@ export const productDoctorParse = (source, prJson, pr) => {
     );
 
     detailsSheetData.push([
-        'STT', 'TÊN THUỐC/BS', undefined, undefined, 'SL'
+        'STT', 'TÊN/BS', undefined, undefined, 'SL'
     ]);
 
     let detailsSumTotalQty = 0;
@@ -854,9 +866,13 @@ export const productDoctorParse = (source, prJson, pr) => {
         toArray()
     );
 
-    sheetData.push([
+    sheetData.push(
+        showAmountColumn ? [
         'STT', 'TÊN', 'SL', 'ĐƠN GIÁ', 'TT', 'CK', 'TCK'
-    ]);
+    ] : [
+        'STT', 'TÊN', 'SL', 'ĐƠN GIÁ', 'CK', 'TCK'
+    ]
+    );
 
     let sumTotalQty = 0;
     let sumTotalAmount = 0;
@@ -869,18 +885,24 @@ export const productDoctorParse = (source, prJson, pr) => {
             sumTotalQty += row.qty;
             sumTotalAmount += amount;
             sumTotalDiscountAmount += discountAmount;
-            sheetData.push([
+            sheetData.push(
+                showAmountColumn ? [
                 ++rowCount, row.name, row.qty, row.price, amount, row.discount, discountAmount
+            ] : [
+                ++rowCount, row.name, row.qty, row.price, row.discount, discountAmount
             ]);
         }
 
     });
 
-    sheetData.push([
+    sheetData.push( 
+        showAmountColumn ? [
         'TỔNG', undefined, sumTotalQty, undefined, sumTotalAmount, undefined, sumTotalDiscountAmount
+    ] : [
+        'TỔNG', undefined, sumTotalQty, undefined, undefined, sumTotalDiscountAmount
     ]);
 
-    saveExcelFile(`${getDestPath()}/${excelFileName}.xlsx`, sheetData, "Tổng Hợp", summaryParseFormat, true, detailsSheetData, "Chi Tiết", summaryParseFormat2);
+    saveExcelFile(`${getDestPath()}/${excelFileName}.xlsx`, sheetData, "Tổng Hợp", summaryParseFormat, false, detailsSheetData, "Chi Tiết", summaryParseFormat2);
 
     return [
         pr.fullName, sumTotalQty, sumTotalAmount, sumTotalDiscountAmount
@@ -903,7 +925,7 @@ export const exportPrSummary = (date, data) => {
     });
 
     data.unshift([
-        'STT', 'Trình Dược', 'SL', 'Doanh Số', 'Chiết Khấu', 'Ghi Chú'
+        'STT', 'TD', 'SL', 'Doanh Số', 'CK', 'Ghi Chú'
     ]);
 
 
@@ -912,7 +934,7 @@ export const exportPrSummary = (date, data) => {
     ]);
 
     data.unshift([
-        'BẢNG CHIẾT KHẤU TỔNG HỢP'
+        'BẢNG TỔNG HỢP'
     ]);
 
     data.unshift([
@@ -946,6 +968,12 @@ const prSummaryFormat = (worksheet) => {
     });
     worksheet.mergeCells(`A${worksheet.rowCount - 2}:B${worksheet.rowCount - 2}`);
     worksheet.getCell(`A${worksheet.rowCount - 2}`).style.alignment = { horizontal: 'center', vertical: 'middle' };
+    for(let row = 6; row < worksheet.rowCount; row ++ ) {
+        worksheet.getCell(`D${row}`).font = {
+            color: { argb: 'FFAAAAAA' },
+            italic: true
+          };
+    }
 
     // border content
     borderExcel(worksheet, headerRowNumber, worksheet.rowCount - 2, allColumns);

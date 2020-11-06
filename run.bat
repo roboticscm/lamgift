@@ -10,3 +10,4 @@
 #   1 -> show amount column
 #   0 -> hide amount column
 node dist/main.js 1 1 1
+# node dist/main.js

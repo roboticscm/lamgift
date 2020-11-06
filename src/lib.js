@@ -43,10 +43,10 @@ export const saveExcelFile = async (fileName, data, sheetName = "Index", customF
     if (sheetName2) {
         worksheet2 = workbook.addWorksheet(sheetName2);
     }
-
-    data.unshift([
-        showFullCompany ? company : shortCompany
-    ]);
+        data.unshift([
+            showFullCompany ? company : ''
+        ]);
+   
     // Report Summary
     data.push([]);
     data.push([copyright]);
@@ -54,7 +54,7 @@ export const saveExcelFile = async (fileName, data, sheetName = "Index", customF
 
     if (data2 && worksheet2) {
         data2.unshift([
-            showFullCompany ? company : shortCompany
+            showFullCompany ? company : ''
         ]);
         data2.push([]);
         data2.push([copyright]);
@@ -108,7 +108,7 @@ export const saveExcelFile = async (fileName, data, sheetName = "Index", customF
 
 }
 
-export const setFontAndSizeExcel = (worksheet, fontFamily = 'Tahoma', fontSize = 12) => {
+export const setFontAndSizeExcel = (worksheet, fontFamily = 'Tahoma', fontSize = 13) => {
     for (let col = 1; col <= worksheet.columnCount; col++) {
         worksheet.getColumn(col).eachCell((cell, rowNumber) => {
             cell.style = { font: { name: fontFamily, size: fontSize } }

@@ -21,7 +21,9 @@
   },
   "homepage": "https://github.com/roboticscm/lamgift#readme",
   "dependencies": {
+    "@pdftron/pdfnet-node": "^8.0.0",
     "exceljs": "^4.1.1",
+    "express": "^4.17.1",
     "libreoffice-convert": "^1.3.0",
     "rxjs": "^6.6.3",
     "xlsx": "^0.16.8"
