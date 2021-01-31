@@ -1,6 +1,10 @@
 import { checkSourceFile } from './input';
-const {PDFNet} = require('@pdftron/pdfnet-node');
+// const {PDFNet} = require('@pdftron/pdfnet-node');
 const path = require('path');
+
+// const { Model } = require('objection');
+// const knex = require('knex');
+const { Pool } = require('pg');
 
 export const useSecuredMethod = process.argv[2] === '1';
 export const hideZeroRow = process.argv[3] === '1';

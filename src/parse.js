@@ -368,6 +368,24 @@ export const detailsParse = (source, prJson) => {
                     'STT', 'SP', 'SL', 'Đơn giá', '% CK', 'CK'
                 ] );
             }
+
+            doctorRows.sort((a, b) => {
+                if(a[1] > b[1]) {
+                    return 1;
+                }else if (a[1] < b[1]) {
+                    return -1;
+                } else {
+                    return 0;
+                }
+            });
+            let doctorRowNumber = 1;
+            doctorRows.map((it) => {
+                it[0] = doctorRowNumber++;
+                return it;
+            });
+
+            console.log(doctorRows);
+
             doctorSheetData.push(
                 ...doctorRows
             );
@@ -724,7 +742,7 @@ const prProductFormat = (worksheet) => {
 
 export const getShortProductName = (name, useSecuredMethod = false) => {
     name = name.replace('/', '-');
-    const shortName = name.replace(/\(.*?\)/, '').trim();
+    const shortName = name;//name.replace(/\(.*?\)/, '').trim();
     if (useSecuredMethod) {
         return shortName.substring(0, 4) + '*'.repeat(shortName.length - 4);
     } else {
